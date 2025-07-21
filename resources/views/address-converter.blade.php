@@ -248,24 +248,51 @@
                             <h5 class="fw-bold mb-3"><i class="fas fa-info-circle me-2"></i>Hướng dẫn sử dụng</h5>
                             <ul class="mb-0">
                                 <li><strong>1. Tải mã nguồn:</strong>
-                                    <code>git clone https://github.com/Manh-IT-K2/Address-Convert-DB.git</code>
+                                    <div class="d-flex align-items-center">
+                                        <code class="flex-grow-1">git clone https://github.com/Manh-IT-K2/Address-Convert-DB.git</code>
+                                        <button class="btn btn-sm btn-outline-secondary ms-2 copy-btn" data-clipboard-text="git clone https://github.com/Manh-IT-K2/Address-Convert-DB.git">
+                                            <i class="far fa-copy"></i>
+                                        </button>
+                                    </div>
                                 </li>
                                 <li><strong>2. Cài đặt & cấu hình:</strong>
                                     <ul>
-                                        <li><code>composer install</code></li>
+                                        <li>
+                                            <div class="d-flex align-items-center">
+                                                <code class="flex-grow-1">composer install</code>
+                                                <button class="btn btn-sm btn-outline-secondary ms-2 copy-btn" data-clipboard-text="composer install">
+                                                    <i class="far fa-copy"></i>
+                                                </button>
+                                            </div>
+                                        </li>
                                         <li>Sửa file <code>.env</code> để khai báo DB</li>
-                                        <li><code>php artisan key:generate</code></li>
+                                        <li>
+                                            <div class="d-flex align-items-center">
+                                                <code class="flex-grow-1">php artisan key:generate</code>
+                                                <button class="btn btn-sm btn-outline-secondary ms-2 copy-btn" data-clipboard-text="php artisan key:generate">
+                                                    <i class="far fa-copy"></i>
+                                                </button>
+                                            </div>
+                                        </li>
                                     </ul>
                                 </li>
                                 <li><strong>3. Chuẩn bị bảng dữ liệu:</strong> <code>vtiger_diachicf</code> gồm:
                                     <ul>
-                                        <li><code>diachiid</code> – khóa chính (auto increment)</li>
-                                        <li><code>cf_860</code> – Tỉnh/Thành phố</li>
-                                        <li><code>cf_862</code> – Quận/Huyện</li>
-                                        <li><code>cf_864</code> – Phường/Xã</li>
+                                        <li><code>diachiid</code> - khóa chính (auto increment)</li>
+                                        <li><code>cf_860</code> - Tỉnh/Thành phố</li>
+                                        <li><code>cf_862</code> - Quận/Huyện</li>
+                                        <li><code>cf_864</code> - Phường/Xã</li>
                                     </ul>
                                 </li>
-                                <li><strong>4. Chạy ứng dụng:</strong> <code>php artisan serve</code> → truy cập <code>localhost:8000</code></li>
+                                <li><strong>4. Chạy ứng dụng:</strong>
+                                    <div class="d-flex align-items-center">
+                                        <code class="flex-grow-1">php artisan serve</code>
+                                        <button class="btn btn-sm btn-outline-secondary ms-2 copy-btn" data-clipboard-text="php artisan serve">
+                                            <i class="far fa-copy"></i>
+                                        </button>
+                                    </div>
+                                    → truy cập <code>localhost:8000</code>
+                                </li>
                                 <li><strong>5. Nhấn nút "Bắt đầu chuyển đổi"</strong> để cập nhật địa chỉ mới</li>
                                 <li><strong>6. Lưu ý:</strong>
                                     <ul>
@@ -431,6 +458,32 @@
             setTimeout(() => {
                 fileConverterForm.submit();
             }, 100);
+        });
+    </script>
+    <!-- Thêm thư viện clipboard.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/2.0.8/clipboard.min.js"></script>
+    <script>
+        // Khởi tạo clipboard.js
+        new ClipboardJS('.copy-btn');
+
+        // Hiển thị tooltip khi copy
+        document.querySelectorAll('.copy-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const originalTitle = this.getAttribute('data-original-title') || '';
+                this.setAttribute('data-original-title', 'Đã copy!');
+                $(this).tooltip('show');
+
+                setTimeout(() => {
+                    this.setAttribute('data-original-title', originalTitle);
+                    $(this).tooltip('hide');
+                }, 1000);
+            });
+
+            // Khởi tạo tooltip (nếu dùng Bootstrap)
+            $(btn).tooltip({
+                trigger: 'manual',
+                placement: 'top'
+            });
         });
     </script>
 </body>
