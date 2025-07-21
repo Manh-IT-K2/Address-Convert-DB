@@ -14,3 +14,6 @@ Route::get('/test-convert', function () {
 });
 
 Route::post('/test-convert', [AddressConverterController::class, 'handleTestConvert'])->name('test.convert.address');
+
+Route::post('/address/convert/file', [AddressConverterController::class, 'processFile'])
+    ->name('address.convert.file');

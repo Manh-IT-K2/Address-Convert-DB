@@ -34,7 +34,19 @@
             border-bottom: none;
         }
 
+        /* Thêm vào phần style */
+        .btn-convert-container {
+            display: flex;
+            justify-content: center;
+            margin: 20px 0;
+            position: relative;
+        }
+
         .btn-convert {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: white !important;
             background-color: var(--primary-color);
             border: none;
             border-radius: 50px;
@@ -44,16 +56,66 @@
             text-transform: uppercase;
             transition: all 0.3s;
             box-shadow: 0 4px 15px rgba(78, 115, 223, 0.35);
+            min-width: 220px;
+            position: relative;
+        }
+
+        .btn-convert i {
+            color: white !important;
+            margin-right: 8px;
         }
 
         .btn-convert:hover {
             transform: translateY(-3px);
             box-shadow: 0 7px 20px rgba(78, 115, 223, 0.4);
             background-color: #3a5bd9;
+            color: white !important;
         }
 
         .btn-convert:active {
             transform: translateY(1px);
+        }
+
+        /* Overlay loading */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+        }
+
+        .loading-overlay.active {
+            opacity: 1;
+            pointer-events: all;
+            display: flex;
+        }
+
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
         }
 
         .progress-container {
@@ -126,6 +188,22 @@
             color: var(--danger-color);
         }
 
+        /* Thêm vào phần style */
+        .form-file-text {
+            font-size: 0.875rem;
+            color: #6c757d;
+        }
+
+        #sqlFile {
+            border: 2px dashed #dee2e6;
+            padding: 20px;
+            transition: all 0.3s;
+        }
+
+        #sqlFile:hover {
+            border-color: var(--primary-color);
+        }
+
         .animate-fade-in {
             animation: fadeIn 0.5s ease-in;
         }
@@ -143,6 +221,11 @@
 </head>
 
 <body>
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner"></div>
+    </div>
+
     <div class="container py-5">
         <div class="row justify-content-center">
             <div class="col-lg-10">
@@ -161,15 +244,79 @@
                         <div class="mb-4 animate__animated animate__fadeIn">
                             <p>Công cụ này sẽ chuyển đổi địa chỉ từ định dạng cũ (Tỉnh/TP, Quận/Huyện, Phường/Xã) sang định dạng mới (Thành phố, Phường/Xã).</p>
                         </div>
+                        <div class="alert alert-primary animate__animated animate__fadeIn" role="alert">
+                            <h5 class="fw-bold mb-3"><i class="fas fa-info-circle me-2"></i>Hướng dẫn sử dụng</h5>
+                            <ul class="mb-0">
+                                <li><strong>1. Tải mã nguồn:</strong>
+                                    <code>git clone https://github.com/Manh-IT-K2/Address-Convert-DB.git</code>
+                                </li>
+                                <li><strong>2. Cài đặt & cấu hình:</strong>
+                                    <ul>
+                                        <li><code>composer install</code></li>
+                                        <li>Sửa file <code>.env</code> để khai báo DB</li>
+                                        <li><code>php artisan key:generate</code></li>
+                                    </ul>
+                                </li>
+                                <li><strong>3. Chuẩn bị bảng dữ liệu:</strong> <code>vtiger_diachicf</code> gồm:
+                                    <ul>
+                                        <li><code>diachiid</code> – khóa chính (auto increment)</li>
+                                        <li><code>cf_860</code> – Tỉnh/Thành phố</li>
+                                        <li><code>cf_862</code> – Quận/Huyện</li>
+                                        <li><code>cf_864</code> – Phường/Xã</li>
+                                    </ul>
+                                </li>
+                                <li><strong>4. Chạy ứng dụng:</strong> <code>php artisan serve</code> → truy cập <code>localhost:8000</code></li>
+                                <li><strong>5. Nhấn nút "Bắt đầu chuyển đổi"</strong> để cập nhật địa chỉ mới</li>
+                                <li><strong>6. Lưu ý:</strong>
+                                    <ul>
+                                        <li>Dữ liệu địa chỉ cũ phải chính xác, đúng chính tả, không viết tắt</li>
+                                        <li>Backup dữ liệu trước khi sử dụng để đảm bảo an toàn</li>
+                                    </ul>
+                                </li>
+                            </ul>
+                        </div>
 
-                        <form method="POST" action="{{ route('address.convert') }}">
+                        <form method="POST" action="{{ route('address.convert') }}" id="converterForm">
                             @csrf
-                            <div class="d-grid gap-2 d-md-flex justify-content-md-start animate__animated animate__fadeIn">
-                                <button type="submit" class="btn btn-convert" onclick="return confirm('Bạn có chắc chắn muốn chuyển đổi địa chỉ?')">
-                                    <i class="fas fa-sync-alt me-2"></i> Bắt đầu chuyển đổi
+                            <div class="btn-convert-container animate__animated animate__fadeIn">
+                                <button type="submit" class="btn btn-convert" id="convertBtn">
+                                    <span class="btn-text">
+                                        <i class="fas fa-sync-alt me-2"></i> Bắt đầu chuyển đổi
+                                    </span>
                                 </button>
                             </div>
                         </form>
+                        <!-- Thêm vào card-body, sau phần form hiện tại -->
+                        <!-- <div class="mt-5 animate__animated animate__fadeIn">
+                            <h5 class="mb-3">Hoặc chuyển đổi từ file SQL</h5>
+                            <form method="POST" action="{{ route('address.convert.file') }}" enctype="multipart/form-data" id="fileConverterForm">
+                                @csrf
+                                <div class="row">
+                                    <div class="col-md-8">
+                                        <div class="mb-3">
+                                            <label for="sqlFile" class="form-label">Chọn file SQL cần chuyển đổi</label>
+                                            <input class="form-control" type="file" id="sqlFile" name="sql_file" accept=".sql,.txt" required>
+                                            <div class="form-text">File SQL chứa dữ liệu địa chỉ cần chuyển đổi (tối đa 10MB)</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4 d-flex align-items-end">
+                                        <button type="submit" class="btn btn-primary" id="convertFileBtn">
+                                            <i class="fas fa-file-import me-2"></i> Chuyển đổi từ file
+                                        </button>
+                                    </div>
+                                </div>
+                            </form>
+                        </div> -->
+                        @if(session('conversion_results'))
+                        <div class="alert alert-info mt-4">
+                            <h5>Kết quả chuyển đổi từ file:</h5>
+                            <ul>
+                                <li>Chuyển đổi thành công: {{ session('conversion_results.converted') }} bản ghi</li>
+                                <li>Cập nhật tỉnh/thành phố: {{ session('conversion_results.province_updated') }} bản ghi</li>
+                                <li>Thất bại: {{ session('conversion_results.failed') }} bản ghi</li>
+                            </ul>
+                        </div>
+                        @endif
 
                         @if(session('total_records') && session('converted') !== null)
                         <div class="progress-container animate__animated animate__fadeIn">
@@ -232,14 +379,13 @@
 
     <footer class="footer animate__animated animate__fadeIn">
         <div class="container">
-            <span>Bản quyền &copy; {{ date('Y') }} thuộc về <strong>Manh-IT-K2</strong>. Mọi quyền được bảo lưu.</span>
+            <span>Bản quyền &copy; {{ date('Y') }} thuộc về <strong>MTAC</strong> phát triển bởi <strong>Manh-IT-K2</strong>.</span>
         </div>
     </footer>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/js/all.min.js"></script>
     <script>
-        // Thêm hiệu ứng khi load trang
         document.addEventListener('DOMContentLoaded', function() {
             const elements = document.querySelectorAll('.animate__animated');
             elements.forEach((el, index) => {
@@ -247,6 +393,44 @@
                     el.style.opacity = 1;
                 }, index * 100);
             });
+
+            const form = document.getElementById('converterForm');
+            const convertBtn = document.getElementById('convertBtn');
+            const loadingOverlay = document.getElementById('loadingOverlay');
+
+            form.addEventListener('submit', function(e) {
+                // Ngăn submit mặc định
+                e.preventDefault();
+
+                // Hiển thị loading ngay lập tức
+                loadingOverlay.classList.add('active');
+                loadingOverlay.style.display = 'flex';
+                loadingOverlay.style.opacity = '1';
+
+                // Vô hiệu hóa nút
+                convertBtn.disabled = true;
+
+                // Thêm độ trễ nhỏ để đảm bảo UI cập nhật
+                setTimeout(() => {
+                    form.submit();
+                }, 100);
+            });
+        });
+        // Thêm vào phần script
+        const fileConverterForm = document.getElementById('fileConverterForm');
+        const convertFileBtn = document.getElementById('convertFileBtn');
+
+        fileConverterForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            // Hiển thị loading
+            loadingOverlay.style.display = 'flex';
+            convertFileBtn.disabled = true;
+
+            // Submit form
+            setTimeout(() => {
+                fileConverterForm.submit();
+            }, 100);
         });
     </script>
 </body>
