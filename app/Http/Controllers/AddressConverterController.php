@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Log;
 
 class AddressConverterController extends Controller
@@ -84,275 +85,6 @@ class AddressConverterController extends Controller
     {
         return view('address-converter');
     }
-    // Thêm phương thức mới để xử lý file
-    // protected function parseSqlFile($content)
-    // {
-    //     // Tìm tất cả các câu lệnh INSERT vào bảng vtiger_diachicf
-    //     preg_match_all('/INSERT INTO `vtiger_diachicf`.*?\((.*?)\)\s*VALUES\s*\((.*?)\);/s', $content, $matches);
-
-    //     $data = [];
-    //     for ($i = 0; $i < count($matches[0]); $i++) {
-    //         $columns = $this->parseSqlColumns($matches[1][$i]);
-    //         $values = $this->parseSqlValues($matches[2][$i]);
-
-    //         // Kết hợp columns và values thành associative array
-    //         $rowData = [];
-    //         foreach ($columns as $index => $column) {
-    //             $rowData[$column] = $values[$index] ?? null;
-    //         }
-
-    //         $data[] = [
-    //             'table' => 'vtiger_diachicf',
-    //             'data' => $rowData
-    //         ];
-    //     }
-
-    //     return $data;
-    // }
-
-    // protected function parseSqlColumns($columnsString)
-    // {
-    //     // Xử lý chuỗi columns trong SQL
-    //     $columns = array_map(function ($col) {
-    //         return trim($col, "` \t\n\r\0\x0B");
-    //     }, explode(',', $columnsString));
-
-    //     return $columns;
-    // }
-
-    // protected function parseSqlValues($valuesString)
-    // {
-    //     // Xử lý chuỗi values trong SQL phức tạp hơn
-    //     $values = [];
-    //     $current = '';
-    //     $inQuotes = false;
-    //     $escapeNext = false;
-
-    //     for ($i = 0; $i < strlen($valuesString); $i++) {
-    //         $char = $valuesString[$i];
-
-    //         if ($escapeNext) {
-    //             $current .= $char;
-    //             $escapeNext = false;
-    //             continue;
-    //         }
-
-    //         if ($char === '\\') {
-    //             $escapeNext = true;
-    //             continue;
-    //         }
-
-    //         if ($char === "'") {
-    //             $inQuotes = !$inQuotes;
-    //             continue;
-    //         }
-
-    //         if ($char === ',' && !$inQuotes) {
-    //             $values[] = $current;
-    //             $current = '';
-    //             continue;
-    //         }
-
-    //         $current .= $char;
-    //     }
-
-    //     if ($current !== '') {
-    //         $values[] = $current;
-    //     }
-
-    //     return $values;
-    // }
-
-    // protected function convertAddressData($data)
-    // {
-    //     $converted = 0;
-    //     $failed = 0;
-    //     $provinceUpdated = 0;
-    //     $convertedData = [];
-    //     $failedRecords = [];
-
-    //     foreach ($data as $entry) {
-    //         $rowData = $entry['data'];
-
-    //         // Lấy thông tin địa chỉ từ các trường tương ứng
-    //         $oldProvince = $rowData['cf_860'] ?? null;
-    //         $oldWard = $rowData['cf_864'] ?? null;
-    //         $district = $rowData['cf_862'] ?? null;
-    //         $diachiid = $rowData['diachiid'] ?? null;
-
-    //         if (!$oldProvince || !$oldWard) {
-    //             $failed++;
-    //             $failedRecords[] = [
-    //                 'id' => $diachiid,
-    //                 'ward' => $oldWard,
-    //                 'district' => $district,
-    //                 'province' => $oldProvince,
-    //                 'reason' => 'Thiếu thông tin tỉnh hoặc phường/xã'
-    //             ];
-    //             continue;
-    //         }
-
-    //         $newWard = $this->findNewWard($oldProvince, $oldWard);
-    //         $newProvince = $this->provinceMergeMap[$this->normalizeName($oldProvince)] ?? $oldProvince;
-
-    //         $convertedRow = $rowData;
-    //         if ($newWard) {
-    //             $convertedRow['cf_864'] = $newWard;
-    //             $converted++;
-    //         } else {
-    //             $failed++;
-    //             $failedRecords[] = [
-    //                 'id' => $diachiid,
-    //                 'ward' => $oldWard,
-    //                 'district' => $district,
-    //                 'province' => $oldProvince,
-    //                 'reason' => 'Không tìm thấy phường/xã tương ứng'
-    //             ];
-    //         }
-
-    //         if ($this->normalizeName($newProvince) !== $this->normalizeName($oldProvince)) {
-    //             $convertedRow['cf_860'] = $newProvince;
-    //             $provinceUpdated++;
-    //         }
-
-    //         $convertedData[] = [
-    //             'table' => $entry['table'],
-    //             'data' => $convertedRow
-    //         ];
-    //     }
-
-    //     return [
-    //         'converted_data' => $convertedData,
-    //         'converted' => $converted,
-    //         'failed' => $failed,
-    //         'province_updated' => $provinceUpdated,
-    //         'failed_records' => $failedRecords
-    //     ];
-    // }
-
-    // protected function generateOutputSql($convertedData)
-    // {
-    //     $output = "";
-
-    //     foreach ($convertedData as $entry) {
-    //         $columns = array_keys($entry['data']);
-    //         $values = array_values($entry['data']);
-
-    //         // Escape các giá trị
-    //         $escapedValues = array_map(function ($value) {
-    //             if ($value === null) return 'NULL';
-    //             return "'" . str_replace("'", "''", $value) . "'";
-    //         }, $values);
-
-    //         $columnsStr = '`' . implode('`, `', $columns) . '`';
-    //         $valuesStr = implode(', ', $escapedValues);
-
-    //         $output .= "INSERT INTO `{$entry['table']}` ($columnsStr) VALUES ($valuesStr);\n";
-    //     }
-
-    //     return $output;
-    // }
-    // public function processFile(Request $request)
-    // {
-    //     $request->validate([
-    //         'sql_file' => [
-    //             'required',
-    //             'file',
-    //             'mimetypes:text/plain,text/x-sql',
-    //             'mimes:sql,txt',
-    //             'max:10240' // 10MB
-    //         ]
-    //     ]);
-
-    //     set_time_limit(1000);
-    //     $this->loadWardMappingsFromApi();
-
-    //     try {
-    //         // 1. Tạo bảng tạm với cấu trúc giống vtiger_diachicf
-    //         $tempTable = 'temp_address_' . uniqid();
-
-    //         DB::statement("CREATE TABLE $tempTable LIKE vtiger_diachicf");
-
-    //         // 2. Import file SQL vào bảng tạm
-    //         $filePath = $request->file('sql_file')->getRealPath();
-    //         $importCommand = "mysql -u " . env('DB_USERNAME') .
-    //             " -p" . env('DB_PASSWORD') .
-    //             " " . env('DB_DATABASE') .
-    //             " < $filePath";
-
-    //         // Thay thế INSERT INTO vtiger_diachicf thành bảng tạm
-    //         $sqlContent = file_get_contents($filePath);
-    //         $sqlContent = str_replace(
-    //             'INSERT INTO `vtiger_diachicf`',
-    //             'INSERT INTO `' . $tempTable . '`',
-    //             $sqlContent
-    //         );
-
-    //         $tmpFilePath = tempnam(sys_get_temp_dir(), 'sql_');
-    //         file_put_contents($tmpFilePath, $sqlContent);
-
-    //         exec("mysql -u " . env('DB_USERNAME') .
-    //             " -p" . env('DB_PASSWORD') .
-    //             " " . env('DB_DATABASE') .
-    //             " < $tmpFilePath", $output, $returnVar);
-
-    //         if ($returnVar !== 0) {
-    //             throw new \Exception("Lỗi import SQL vào database");
-    //         }
-
-    //         // 3. Xử lý chuyển đổi trong DB
-    //         $converted = 0;
-    //         $failed = 0;
-
-    //         $records = DB::table($tempTable)->get();
-    //         foreach ($records as $record) {
-    //             $oldProvince = $record->cf_860;
-    //             $oldWard = $record->cf_864;
-
-    //             if (!$oldProvince || !$oldWard) {
-    //                 $failed++;
-    //                 continue;
-    //             }
-
-    //             $newWard = $this->findNewWard($oldProvince, $oldWard);
-    //             $newProvince = $this->provinceMergeMap[$this->normalizeName($oldProvince)] ?? $oldProvince;
-
-    //             $updateData = [];
-    //             if ($newWard) {
-    //                 $updateData['cf_864'] = $newWard;
-    //                 $converted++;
-    //             }
-
-    //             if ($this->normalizeName($newProvince) !== $this->normalizeName($oldProvince)) {
-    //                 $updateData['cf_860'] = $newProvince;
-    //             }
-
-    //             if (!empty($updateData)) {
-    //                 DB::table($tempTable)
-    //                     ->where('diachiid', $record->diachiid)
-    //                     ->update($updateData);
-    //             }
-    //         }
-
-    //         // 4. Export bảng tạm ra file SQL
-    //         $exportPath = storage_path('app/converted_' . $tempTable . '.sql');
-    //         exec("mysqldump -u " . env('DB_USERNAME') .
-    //             " -p" . env('DB_PASSWORD') .
-    //             " " . env('DB_DATABASE') .
-    //             " $tempTable > $exportPath");
-
-    //         // 5. Xóa bảng tạm
-    //         DB::statement("DROP TABLE IF EXISTS $tempTable");
-
-    //         // 6. Trả file cho người dùng
-    //         return response()->download($exportPath)
-    //             ->deleteFileAfterSend(true);
-    //     } catch (\Exception $e) {
-    //         Log::error("Process error: " . $e->getMessage());
-    //         return back()->with('error', 'Lỗi xử lý: ' . $e->getMessage());
-    //     }
-    // }
-
 
     public function convertAddresses(Request $request)
     {
@@ -360,77 +92,245 @@ class AddressConverterController extends Controller
 
         $this->loadWardMappingsFromApi();
 
+        // Lấy thông tin cấu hình từ form
+        $tableName = $request->input('table_name', 'vtiger_diachicf');
+        $idField = $request->input('id_field', 'diachiid');
+        $provinceField = $request->input('province_field', 'cf_860');
+        $districtField = $request->input('district_field', 'cf_862');
+        $wardField = $request->input('ward_field', 'cf_864');
+
+        // Kiểm tra bảng và các trường có tồn tại không
+        try {
+            $this->checkAndAddColumns($tableName);
+        } catch (\Exception $e) {
+            return back()->withErrors([
+                'database_error' => $e->getMessage()
+            ])->withInput();
+        }
+
         $converted = 0;
         $failed = 0;
         $provinceUpdated = 0;
-        $failedRecords = []; // Thêm mảng để lưu các bản ghi thất bại
+        $failedRecords = [];
+
         // Lấy tổng số bản ghi để tính %
-        $totalRecords = DB::table('vtiger_diachicf')->count();
+        $totalRecords = DB::table($tableName)->count();
 
-        DB::table('vtiger_diachicf')
-            ->orderBy('diachiid')
-            ->chunk(100, function ($records) use (&$converted, &$failed, &$provinceUpdated, &$failedRecords) {
+        DB::table($tableName)
+            ->orderBy($idField)
+            ->chunk(100, function ($records) use (
+                &$converted,
+                &$failed,
+                &$provinceUpdated,
+                &$failedRecords,
+                $tableName,
+                $idField,
+                $provinceField,
+                $districtField,
+                $wardField,
+            ) {
                 foreach ($records as $record) {
-                    $oldProvince = $record->cf_860;
-                    $oldWard = $record->cf_864;
+                    $recordId = $record->{$idField};
+                    $oldProvince = $record->{$provinceField};
+                    $oldWard = $record->{$wardField};
+                    $district = $record->{$districtField};
 
-                    if (!$oldProvince || !$oldWard) {
+                    // Khởi tạo giá trị mặc định
+                    $status = 'success';
+                    $errorMessage = null;
+
+                    if (!$oldProvince || !$oldWard || !$district) {
+                        $status = 'failed';
+
+                        if (!$oldProvince && !$oldWard && !$district) {
+                            $errorMessage = 'Thiếu thông tin tỉnh, quận/huyện và phường/xã';
+                        } elseif (!$oldProvince && !$district) {
+                            $errorMessage = 'Thiếu thông tin tỉnh và quận/huyện';
+                        } elseif (!$oldProvince && !$oldWard) {
+                            $errorMessage = 'Thiếu thông tin tỉnh và phường/xã';
+                        } elseif (!$district && !$oldWard) {
+                            $errorMessage = 'Thiếu thông tin quận/huyện và phường/xã';
+                        } elseif (!$oldProvince) {
+                            $errorMessage = 'Thiếu thông tin tỉnh/thành phố';
+                        } elseif (!$district) {
+                            $errorMessage = 'Thiếu thông tin quận/huyện';
+                        } else {
+                            $errorMessage = 'Thiếu thông tin phường/xã';
+                        }
+
                         $failed++;
                         $failedRecords[] = [
-                            'id' => $record->diachiid,
+                            'id' => $recordId,
                             'ward' => $oldWard,
-                            'district' => $record->cf_862,
+                            'district' => $district,
                             'province' => $oldProvince,
-                            'reason' => 'Thiếu thông tin tỉnh hoặc phường/xã'
+                            'reason' => $errorMessage
                         ];
+
+                        // Cập nhật trạng thái và lỗi vào DB
+                        $this->updateRecordStatus($tableName, $idField, $recordId, $status, $errorMessage);
                         continue;
                     }
 
                     $newWard = $this->findNewWard($oldProvince, $oldWard);
                     $newProvince = $this->provinceMergeMap[$this->normalizeName($oldProvince)] ?? $oldProvince;
 
+                    // Chuẩn hóa tên tỉnh/thành phố
+                    $newProvince = $this->normalizeProvinceName($newProvince);
+                    $oldProvinceNormalized = $this->normalizeProvinceName($oldProvince);
+
                     $updateData = [];
 
                     if ($newWard) {
-                        $updateData['cf_864'] = $newWard;
+                        $updateData[$wardField] = $newWard;
                         $converted++;
-                        Log::info("Converted successfully ID {$record->diachiid}: $oldWard => $newWard");
+                        Log::info("Converted successfully ID {$recordId}: $oldWard => $newWard");
                     } else {
+                        $status = 'failed';
+                        $errorMessage = $this->getDetailedErrorMessage($oldProvince, $district, $oldWard);
+
                         $failed++;
                         $failedRecords[] = [
-                            'id' => $record->diachiid,
+                            'id' => $recordId,
                             'ward' => $oldWard,
-                            'district' => $record->cf_862,
+                            'district' => $district,
                             'province' => $oldProvince,
-                            'reason' => 'Không tìm thấy phường/xã tương ứng'
+                            'reason' => $errorMessage
                         ];
-                        Log::warning("Convert failed for ID {$record->diachiid}: Ward not found for $oldWard, $record->cf_862, $oldProvince");
+                        Log::warning("Convert failed for ID {$recordId}: $errorMessage");
                     }
 
-                    if ($this->normalizeName($newProvince) !== $this->normalizeName($oldProvince)) {
-                        $updateData['cf_860'] = $newProvince;
+                    if ($newProvince !== $oldProvinceNormalized) {
+                        $updateData[$provinceField] = $newProvince;
                         $provinceUpdated++;
                     }
 
-                    if (!empty($updateData)) {
-                        DB::table('vtiger_diachicf')
-                            ->where('diachiid', $record->diachiid)
-                            ->update($updateData);
-                    }
+                    // Luôn cập nhật trạng thái và thông báo lỗi
+                    $updateData['convert_status'] = $status;
+                    $updateData['convert_error'] = $errorMessage ?? '';
+
+                    DB::table($tableName)
+                        ->where($idField, $recordId)
+                        ->update($updateData);
                 }
             });
 
-        // Lưu danh sách thất bại vào session (chỉ lấy 1000 bản ghi đầu để tránh quá lớn)
+        // Lưu danh sách thất bại vào session
         $request->session()->flash('failed_records', array_slice($failedRecords, 0, 1000));
         $request->session()->flash('total_failed', $failed);
-        // Trong controller
         $request->session()->flash('converted', $converted);
         $request->session()->flash('total_records', $totalRecords);
-        $successRate = $totalRecords > 0 ? round($converted / $totalRecords * 100, 2) : 0;
-        $request->session()->flash('success_rate', $successRate);
+        $request->session()->flash('success_rate', $totalRecords > 0 ? round($converted / $totalRecords * 100, 2) : 0);
+        $request->session()->flash('table_config', [
+            'table_name' => $tableName,
+            'id_field' => $idField,
+            'province_field' => $provinceField,
+            'district_field' => $districtField,
+            'ward_field' => $wardField
+        ]);
 
         return back()->with('success', "Đã chuyển đổi $converted bản ghi thành công (trong đó cập nhật $provinceUpdated tỉnh/thành phố), $failed bản ghi thất bại.");
     }
+
+    /**
+     * Kiểm tra và thêm 2 cột mới nếu chưa tồn tại
+     */
+    protected function checkAndAddColumns($tableName)
+    {
+        if (!Schema::hasColumn($tableName, 'convert_status')) {
+            Schema::table($tableName, function ($table) {
+                $table->string('convert_status', 20)->nullable()->comment('Trạng thái chuyển đổi: success/failed');
+            });
+        }
+
+        if (!Schema::hasColumn($tableName, 'convert_error')) {
+            Schema::table($tableName, function ($table) {
+                $table->text('convert_error')->nullable()->comment('Thông báo lỗi chuyển đổi');
+            });
+        }
+    }
+
+    /**
+     * Phân loại thông báo lỗi chi tiết
+     */
+    protected function getDetailedErrorMessage($province, $district, $ward)
+    {
+        $normalizedProvince = $this->normalizeName($province);
+        $mergedProvince = $this->provinceMergeMap[$normalizedProvince] ?? $normalizedProvince;
+
+        // Kiểm tra xem tỉnh có trong danh sách mapping không
+        if (!isset($this->wardMappings[$mergedProvince])) {
+            return "Tỉnh/thành phố '$province' không hợp lệ hoặc không có trong danh sách chuyển đổi";
+        }
+
+        // Kiểm tra các trường hợp cụ thể
+        $provinceExists = !empty($province);
+        $districtExists = !empty($district);
+        $wardExists = !empty($ward);
+
+        if ($provinceExists && $districtExists && $wardExists) {
+            return "Không tìm thấy phường/xã '$ward' thuộc '$district', '$province' trong danh sách chuyển đổi";
+        }
+
+        if ($provinceExists && $districtExists) {
+            return "Thiếu thông tin phường/xã (có tỉnh '$province' và quận/huyện '$district')";
+        }
+
+        if ($provinceExists) {
+            return "Thiếu thông tin quận/huyện và phường/xã (chỉ có tỉnh '$province')";
+        }
+
+        return "Thông tin địa chỉ không đầy đủ hoặc không hợp lệ";
+    }
+
+    /**
+     * Cập nhật trạng thái và lỗi vào record
+     */
+    protected function updateRecordStatus($tableName, $idField, $recordId, $status, $errorMessage)
+    {
+        DB::table($tableName)
+            ->where($idField, $recordId)
+            ->update([
+                'convert_status' => $status,
+                'convert_error' => $errorMessage
+            ]);
+    }
+
+    /**
+     * Kiểm tra bảng và các trường có tồn tại trong database không
+     */
+    protected function validateTableAndFields($tableName, $idField, $provinceField, $districtField, $wardField)
+    {
+        // Kiểm tra bảng có tồn tại không
+        if (!Schema::hasTable($tableName)) {
+            throw new \Exception("Bảng '$tableName' không tồn tại trong database.");
+        }
+
+        // Lấy danh sách các cột trong bảng
+        $columns = Schema::getColumnListing($tableName);
+
+        // Kiểm tra các trường bắt buộc
+        $requiredFields = [
+            'ID' => $idField,
+            'Tỉnh/Thành phố' => $provinceField,
+            'Quận/Huyện' => $districtField,
+            'Phường/Xã' => $wardField
+        ];
+
+        $missingFields = [];
+
+        foreach ($requiredFields as $fieldName => $field) {
+            if (!in_array($field, $columns)) {
+                $missingFields[] = "$fieldName ($field)";
+            }
+        }
+
+        if (!empty($missingFields)) {
+            $fieldsList = implode(', ', $missingFields);
+            throw new \Exception("Các trường sau không tồn tại trong bảng '$tableName': $fieldsList");
+        }
+    }
+
     protected function loadWardMappingsFromApi()
     {
         // Đường dẫn đến file JSON
@@ -468,7 +368,7 @@ class AddressConverterController extends Controller
                     $mergedFromList = [$mergedFromList];
                 }
 
-                // Xử lý cả 2 trường hợp "Giữ nguyên" và "Giữ nguyên hiện trạng"
+                // Xử lý trường hợp "Giữ nguyên" và "Giữ nguyên hiện trạng"
                 $isPreserved = in_array('Giữ nguyên', $mergedFromList, true) ||
                     in_array('Giữ nguyên trạng', $mergedFromList, true) ||
                     in_array('Giữ nguyên hiện trạng', $mergedFromList, true);
@@ -543,10 +443,6 @@ class AddressConverterController extends Controller
                 $lowerKey = mb_strtolower($key);
                 $unsignedKey = $this->removeDiacritics($lowerKey);
 
-                // Kiểm tra các trường hợp:
-                // - Tên cũ là một phần của tên mới (hoặc ngược lại)
-                // - Không phân biệt hoa thường
-                // - Không phân biệt dấu
                 if (
                     $this->isPartialMatch($lowerWard, $lowerKey) ||
                     $this->isPartialMatch($unsignedWard, $unsignedKey)
@@ -592,65 +488,21 @@ class AddressConverterController extends Controller
         return $text;
     }
 
-    // protected function loadWardMappingsFromApi()
-    // {
-    //     $response = Http::get('https://vietnamlabs.com/api/vietnamprovince');
+    protected function normalizeProvinceName($provinceName)
+    {
+        $provinceName = trim($provinceName);
 
-    //     if (!$response->successful()) {
-    //         abort(500, 'Không thể tải dữ liệu từ API');
-    //     }
+        // Danh sách các thành phố trực thuộc trung ương
+        $cities = ['Hà Nội', 'Hồ Chí Minh', 'Hải Phòng', 'Đà Nẵng', 'Cần Thơ'];
 
-    //     $data = $response->json('data');
+        // Loại bỏ các tiền tố hiện có nếu có
+        $provinceName = preg_replace('/^(Tỉnh|Thành phố)\s+/u', '', $provinceName);
 
-    //     foreach ($data as $provinceData) {
-    //         $province = $provinceData['province'] ?? null;
-    //         if (!$province || !isset($provinceData['wards']) || !is_array($provinceData['wards'])) {
-    //             continue;
-    //         }
-
-    //         $province = trim($province);
-
-    //         foreach ($provinceData['wards'] as $ward) {
-    //             $newWardName = trim($ward['name']);
-    //             $mergedFromList = $ward['mergedFrom'] ?? [];
-
-    //             // Nếu là chuỗi, ép thành mảng 1 phần tử
-    //             if (is_string($mergedFromList)) {
-    //                 $mergedFromList = [$mergedFromList];
-    //             }
-
-    //             // Trường hợp "Giữ nguyên" thì ánh xạ chính nó
-    //             if (is_array($mergedFromList) && in_array('Giữ nguyên hiện trạng', $mergedFromList, true)) {
-    //                 $this->wardMappings[$province][$this->normalizeName($newWardName)] = $newWardName;
-    //                 continue;
-    //             }
-
-    //             foreach ($mergedFromList as $mergedItem) {
-    //                 // Xử lý các trường hợp phức tạp như "xã Bình Hưng (huyện Bình Chánh) và phần còn lại của phường 7 (quận 8)"
-    //                 $parts = preg_split('/\s+và\s+/u', $mergedItem);
-    //                 foreach ($parts as $part) {
-    //                     // Lọc ra tên chính từ phần phức tạp (ví dụ: "xã Bình Hưng (huyện Bình Chánh)" => "xã Bình Hưng")
-    //                     if (preg_match('/^(.*?)\s*\(/u', $part, $matches)) {
-    //                         $part = trim($matches[1]);
-    //                     }
-
-    //                     $normalized = $this->normalizeName($part);
-    //                     if ($normalized !== '') {
-    //                         $this->wardMappings[$province][$normalized] = $newWardName;
-    //                     }
-    //                 }
-    //             }
-
-    //             // Thêm mapping cho chính tên mới (để tìm kiếm không phân biệt hoa thường)
-    //             $this->wardMappings[$province][$this->normalizeName($newWardName)] = $newWardName;
-    //         }
-    //     }
-
-    //     // Log tổng số ward mappings để kiểm tra nhanh
-    //     $total = 0;
-    //     foreach ($this->wardMappings as $province => $wards) {
-    //         $total += count($wards);
-    //     }
-    //     Log::info("Ward mappings loaded: tổng cộng {$total} bản ghi");
-    // }
+        // Thêm tiền tố phù hợp
+        if (in_array($provinceName, $cities)) {
+            return "Thành phố $provinceName";
+        } else {
+            return "Tỉnh $provinceName";
+        }
+    }
 }
