@@ -301,10 +301,6 @@
                                             <i class="fas fa-check-circle text-success me-2"></i>
                                             <span>Phường/Xã</span>
                                         </div>
-                                        <div class="d-flex align-items-center">
-                                            <i class="fas fa-check-circle text-success me-2"></i>
-                                            <span><code>convert_status</code> và <code>convert_error</code> - 2 trường được thêm tự động (nếu lỗi hãy tạo thủ công)</span>
-                                        </div>
                                     </div>
                                 </li>
                                 <li class="mb-2">

@@ -85,6 +85,26 @@ class AddressConverterController extends Controller
     {
         return view('address-converter');
     }
+    protected function normalizeWardName($wardName)
+    {
+        $wardName = trim($wardName);
+
+        // Nếu chỉ là số (vd: "8")
+        if (preg_match('/^\d+$/', $wardName)) {
+            return 'Phường ' . str_pad($wardName, 2, '0', STR_PAD_LEFT);
+        }
+
+        // Nếu có dạng "Phường X" với X < 10 (vd: "Phường 6")
+        if (preg_match('/^Phường\s+(\d+)$/u', $wardName, $matches)) {
+            $number = $matches[1];
+            if ($number < 10) {
+                return 'Phường ' . str_pad($number, 2, '0', STR_PAD_LEFT);
+            }
+        }
+
+        // Các trường hợp khác giữ nguyên
+        return $wardName;
+    }
 
     public function convertAddresses(Request $request)
     {
@@ -98,15 +118,6 @@ class AddressConverterController extends Controller
         $provinceField = $request->input('province_field', 'cf_860');
         $districtField = $request->input('district_field', 'cf_862');
         $wardField = $request->input('ward_field', 'cf_864');
-
-        // Kiểm tra bảng và các trường có tồn tại không
-        try {
-            $this->checkAndAddColumns($tableName);
-        } catch (\Exception $e) {
-            return back()->withErrors([
-                'database_error' => $e->getMessage()
-            ])->withInput();
-        }
 
         $converted = 0;
         $failed = 0;
@@ -134,14 +145,12 @@ class AddressConverterController extends Controller
                     $oldProvince = $record->{$provinceField};
                     $oldWard = $record->{$wardField};
                     $district = $record->{$districtField};
-
+                    // Chuẩn hóa tên phường/xã trước khi xử lý
+                    $normalizedWard = $this->normalizeWardName($oldWard);
                     // Khởi tạo giá trị mặc định
-                    $status = 'success';
                     $errorMessage = null;
 
                     if (!$oldProvince || !$oldWard || !$district) {
-                        $status = 'failed';
-
                         if (!$oldProvince && !$oldWard && !$district) {
                             $errorMessage = 'Thiếu thông tin tỉnh, quận/huyện và phường/xã';
                         } elseif (!$oldProvince && !$district) {
@@ -166,29 +175,29 @@ class AddressConverterController extends Controller
                             'province' => $oldProvince,
                             'reason' => $errorMessage
                         ];
-
-                        // Cập nhật trạng thái và lỗi vào DB
-                        $this->updateRecordStatus($tableName, $idField, $recordId, $status, $errorMessage);
                         continue;
                     }
-
-                    $newWard = $this->findNewWard($oldProvince, $oldWard);
+                    $newWard = $this->findNewWard($oldProvince, $normalizedWard, $district);
                     $newProvince = $this->provinceMergeMap[$this->normalizeName($oldProvince)] ?? $oldProvince;
-
                     // Chuẩn hóa tên tỉnh/thành phố
                     $newProvince = $this->normalizeProvinceName($newProvince);
                     $oldProvinceNormalized = $this->normalizeProvinceName($oldProvince);
 
-                    $updateData = [];
+                    $updateData = [
+                        $wardField => null // Luôn xóa trường ward_field
+                    ];
 
                     if ($newWard) {
-                        $updateData[$wardField] = $newWard;
+                        // Trường hợp chuyển đổi thành công
+                        $updateData[$districtField] = $newWard;
                         $converted++;
-                        Log::info("Converted successfully ID {$recordId}: $oldWard => $newWard");
+                        Log::info("Converted successfully ID {$recordId}: $oldWard, $district, $oldProvince => $newWard");
                     } else {
-                        $status = 'failed';
-                        $errorMessage = $this->getDetailedErrorMessage($oldProvince, $district, $oldWard);
+                        // Trường hợp không chuyển đổi được
+                        $newDistrict = trim($district . ', ' . $oldWard);
+                        $updateData[$districtField] = $newDistrict;
 
+                        $errorMessage = $this->getDetailedErrorMessage($oldProvince, $district, $normalizedWard);
                         $failed++;
                         $failedRecords[] = [
                             'id' => $recordId,
@@ -204,10 +213,6 @@ class AddressConverterController extends Controller
                         $updateData[$provinceField] = $newProvince;
                         $provinceUpdated++;
                     }
-
-                    // Luôn cập nhật trạng thái và thông báo lỗi
-                    $updateData['convert_status'] = $status;
-                    $updateData['convert_error'] = $errorMessage ?? '';
 
                     DB::table($tableName)
                         ->where($idField, $recordId)
@@ -233,42 +238,29 @@ class AddressConverterController extends Controller
     }
 
     /**
-     * Kiểm tra và thêm 2 cột mới nếu chưa tồn tại
-     */
-    protected function checkAndAddColumns($tableName)
-    {
-        if (!Schema::hasColumn($tableName, 'convert_status')) {
-            Schema::table($tableName, function ($table) {
-                $table->string('convert_status', 20)->nullable()->comment('Trạng thái chuyển đổi: success/failed');
-            });
-        }
-
-        if (!Schema::hasColumn($tableName, 'convert_error')) {
-            Schema::table($tableName, function ($table) {
-                $table->text('convert_error')->nullable()->comment('Thông báo lỗi chuyển đổi');
-            });
-        }
-    }
-
-    /**
      * Phân loại thông báo lỗi chi tiết
      */
     protected function getDetailedErrorMessage($province, $district, $ward)
     {
         $normalizedProvince = $this->normalizeName($province);
         $mergedProvince = $this->provinceMergeMap[$normalizedProvince] ?? $normalizedProvince;
+        $normalizedDistrict = $this->normalizeName($district);
 
-        // Kiểm tra xem tỉnh có trong danh sách mapping không
         if (!isset($this->wardMappings[$mergedProvince])) {
             return "Tỉnh/thành phố '$province' không hợp lệ hoặc không có trong danh sách chuyển đổi";
         }
 
-        // Kiểm tra các trường hợp cụ thể
         $provinceExists = !empty($province);
         $districtExists = !empty($district);
         $wardExists = !empty($ward);
 
         if ($provinceExists && $districtExists && $wardExists) {
+            if (
+                !isset($this->wardMappings[$mergedProvince][$normalizedDistrict]) &&
+                !isset($this->wardMappings[$mergedProvince]['*'])
+            ) {
+                return "Không tìm thấy quận/huyện '$district' thuộc '$province' trong danh sách chuyển đổi";
+            }
             return "Không tìm thấy phường/xã '$ward' thuộc '$district', '$province' trong danh sách chuyển đổi";
         }
 
@@ -283,57 +275,8 @@ class AddressConverterController extends Controller
         return "Thông tin địa chỉ không đầy đủ hoặc không hợp lệ";
     }
 
-    /**
-     * Cập nhật trạng thái và lỗi vào record
-     */
-    protected function updateRecordStatus($tableName, $idField, $recordId, $status, $errorMessage)
-    {
-        DB::table($tableName)
-            ->where($idField, $recordId)
-            ->update([
-                'convert_status' => $status,
-                'convert_error' => $errorMessage
-            ]);
-    }
-
-    /**
-     * Kiểm tra bảng và các trường có tồn tại trong database không
-     */
-    protected function validateTableAndFields($tableName, $idField, $provinceField, $districtField, $wardField)
-    {
-        // Kiểm tra bảng có tồn tại không
-        if (!Schema::hasTable($tableName)) {
-            throw new \Exception("Bảng '$tableName' không tồn tại trong database.");
-        }
-
-        // Lấy danh sách các cột trong bảng
-        $columns = Schema::getColumnListing($tableName);
-
-        // Kiểm tra các trường bắt buộc
-        $requiredFields = [
-            'ID' => $idField,
-            'Tỉnh/Thành phố' => $provinceField,
-            'Quận/Huyện' => $districtField,
-            'Phường/Xã' => $wardField
-        ];
-
-        $missingFields = [];
-
-        foreach ($requiredFields as $fieldName => $field) {
-            if (!in_array($field, $columns)) {
-                $missingFields[] = "$fieldName ($field)";
-            }
-        }
-
-        if (!empty($missingFields)) {
-            $fieldsList = implode(', ', $missingFields);
-            throw new \Exception("Các trường sau không tồn tại trong bảng '$tableName': $fieldsList");
-        }
-    }
-
     protected function loadWardMappingsFromApi()
     {
-        // Đường dẫn đến file JSON
         $jsonFilePath = storage_path('app/address_data.json');
 
         if (!file_exists($jsonFilePath)) {
@@ -362,9 +305,10 @@ class AddressConverterController extends Controller
             foreach ($provinceData['wards'] as $ward) {
                 $newWardName = trim($ward['name']);
                 $mergedFromList = $ward['mergedFrom'] ?? [];
+                $districts = $ward['district'] ?? ['Không xác định'];
 
-                // Chuẩn hóa mergedFromList giống API
-                if (is_string($mergedFromList)) {
+                // Đảm bảo $mergedFromList luôn là array
+                if (!is_array($mergedFromList)) {
                     $mergedFromList = [$mergedFromList];
                 }
 
@@ -374,85 +318,143 @@ class AddressConverterController extends Controller
                     in_array('Giữ nguyên hiện trạng', $mergedFromList, true);
 
                 if ($isPreserved) {
-                    $this->wardMappings[$province][$this->normalizeName($newWardName)] = $newWardName;
+                    $this->addWardMapping($province, $newWardName, $newWardName, $districts);
                     continue;
                 }
 
                 foreach ($mergedFromList as $mergedItem) {
-                    // Xử lý chuỗi phức tạp giống API
+                    // Bỏ qua nếu là "một phần của" hoặc "phần còn lại của"
+                    if ($this->shouldIgnoreWard($mergedItem)) {
+                        continue;
+                    }
+
                     $parts = preg_split('/\s+và\s+/u', $mergedItem);
                     foreach ($parts as $part) {
-                        // Xử lý phần trong ngoặc đơn giống API
                         if (preg_match('/^(.*?)(?:\s*\(|$)/u', $part, $matches)) {
                             $part = trim($matches[1]);
                         }
 
+                        // Tiếp tục bỏ qua nếu có cụm từ đặc biệt
+                        if ($this->shouldIgnoreWard($part)) {
+                            continue;
+                        }
+
                         $normalized = $this->normalizeName($part);
                         if ($normalized !== '') {
-                            // Thêm cả phiên bản gốc và phiên bản đã chuẩn hóa
-                            $this->wardMappings[$province][$normalized] = $newWardName;
-                            $this->wardMappings[$province][$part] = $newWardName;
+                            $this->addWardMapping($province, $normalized, $newWardName, $districts);
+                            $this->addWardMapping($province, $part, $newWardName, $districts);
                         }
                     }
                 }
 
                 // Thêm mapping cho chính tên mới
-                $this->wardMappings[$province][$this->normalizeName($newWardName)] = $newWardName;
-                $this->wardMappings[$province][$newWardName] = $newWardName;
+                $this->addWardMapping($province, $newWardName, $newWardName, $districts);
+                $this->addWardMapping($province, $this->normalizeName($newWardName), $newWardName, $districts);
             }
         }
 
         $total = 0;
-        foreach ($this->wardMappings as $province => $wards) {
-            $total += count($wards);
+        foreach ($this->wardMappings as $province => $districts) {
+            foreach ($districts as $district => $wards) {
+                $total += count($wards);
+            }
         }
         Log::info("Ward mappings loaded from file: tổng cộng {$total} bản ghi");
     }
 
-    protected function findNewWard($province, $oldWard)
+    protected function addWardMapping($province, $oldWard, $newWard, $districts)
+    {
+        foreach ($districts as $district) {
+            $normalizedDistrict = $this->normalizeName($district);
+            if ($normalizedDistrict === 'Không xác định') {
+                $normalizedDistrict = '*'; // Đại diện cho tất cả các quận/huyện
+            }
+
+            if (!isset($this->wardMappings[$province][$normalizedDistrict])) {
+                $this->wardMappings[$province][$normalizedDistrict] = [];
+            }
+
+            $this->wardMappings[$province][$normalizedDistrict][$oldWard] = $newWard;
+        }
+    }
+
+    protected function findNewWard($province, $oldWard, $district)
     {
         $normalizedProvince = $this->normalizeName($province);
         $mergedProvince = $this->provinceMergeMap[$normalizedProvince] ?? $normalizedProvince;
+        $normalizedDistrict = $this->normalizeName($district);
 
         // Danh sách các biến thể tên cần thử
         $wardVariants = [
-            $oldWard, // Tên gốc
-            $this->normalizeName($oldWard), // Đã bỏ tiền tố
-            preg_replace('/^(Xã|Phường|Thị trấn)\s+/ui', '', $oldWard) // Chỉ bỏ một số tiền tố cụ thể
+            $oldWard,
+            $this->normalizeName($oldWard),
+            preg_replace('/^(Xã|Phường|Thị trấn)\s+/ui', '', $oldWard)
         ];
-
-        // Loại bỏ các giá trị trùng lặp và rỗng
         $wardVariants = array_unique(array_filter($wardVariants));
 
         foreach ($wardVariants as $wardVariant) {
+            // Bỏ qua nếu là "một phần của" hoặc "phần còn lại của"
+            if ($this->shouldIgnoreWard($wardVariant)) {
+                continue;
+            }
+
             $normalizedWard = $this->normalizeName($wardVariant);
             $lowerWard = mb_strtolower($normalizedWard);
             $unsignedWard = $this->removeDiacritics($lowerWard);
 
-            // 1. Tìm kiếm chính xác
-            if (isset($this->wardMappings[$mergedProvince][$normalizedWard])) {
-                return $this->wardMappings[$mergedProvince][$normalizedWard];
+            // 1. Tìm kiếm chính xác trong quận/huyện cụ thể
+            if (isset($this->wardMappings[$mergedProvince][$normalizedDistrict][$normalizedWard])) {
+                return $this->wardMappings[$mergedProvince][$normalizedDistrict][$normalizedWard];
+            }
+
+            // 2. Tìm kiếm trong tất cả các quận/huyện (khi district = 'Không xác định')
+            if (isset($this->wardMappings[$mergedProvince]['*'][$normalizedWard])) {
+                return $this->wardMappings[$mergedProvince]['*'][$normalizedWard];
             }
 
             if (!isset($this->wardMappings[$mergedProvince])) {
                 continue;
             }
 
-            // 2. Tìm kiếm lỏng hơn - chỉ cần chứa từ khóa
-            foreach ($this->wardMappings[$mergedProvince] as $key => $value) {
-                $lowerKey = mb_strtolower($key);
-                $unsignedKey = $this->removeDiacritics($lowerKey);
+            // 3. Tìm kiếm lỏng hơn - chỉ cần chứa từ khóa
+            $searchAreas = [
+                $normalizedDistrict => $this->wardMappings[$mergedProvince][$normalizedDistrict] ?? [],
+                '*' => $this->wardMappings[$mergedProvince]['*'] ?? []
+            ];
 
-                if (
-                    $this->isPartialMatch($lowerWard, $lowerKey) ||
-                    $this->isPartialMatch($unsignedWard, $unsignedKey)
-                ) {
-                    return $value;
+            foreach ($searchAreas as $searchDistrict => $wards) {
+                foreach ($wards as $key => $value) {
+                    $lowerKey = mb_strtolower($key);
+                    $unsignedKey = $this->removeDiacritics($lowerKey);
+
+                    if (
+                        $this->isPartialMatch($lowerWard, $lowerKey) ||
+                        $this->isPartialMatch($unsignedWard, $unsignedKey)
+                    ) {
+                        return $value;
+                    }
                 }
             }
         }
 
         return null;
+    }
+
+    protected function shouldIgnoreWard($wardName)
+    {
+        $ignorePatterns = [
+            '/một phần (của )?/iu',
+            '/phần còn lại (của )?/iu',
+            '/\bvà\b.*(một phần|phần còn lại)/iu'
+        ];
+
+        foreach ($ignorePatterns as $pattern) {
+            if (preg_match($pattern, $wardName)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     protected function isPartialMatch($needle, $haystack)
