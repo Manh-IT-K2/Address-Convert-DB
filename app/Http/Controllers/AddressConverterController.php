@@ -4,16 +4,13 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Log;
 
 class AddressConverterController extends Controller
 {
-
+    // Biến lưu trữ ánh xạ các phường/xã
     protected $wardMappings = [];
-
+    // Bản đồ hợp nhất các tỉnh thành
     protected $provinceMergeMap = [
         'Tuyên Quang' => 'Tuyên Quang',
         'Hà Giang' => 'Tuyên Quang',
@@ -80,32 +77,17 @@ class AddressConverterController extends Controller
         'Hà Tĩnh' => 'Hà Tĩnh',
         'Cao Bằng' => 'Cao Bằng'
     ];
-
+    /**
+     * Hiển thị trang converter
+     */
     public function showConverter()
     {
         return view('address-converter');
     }
-    protected function normalizeWardName($wardName)
-    {
-        $wardName = trim($wardName);
 
-        // Nếu chỉ là số (vd: "8")
-        if (preg_match('/^\d+$/', $wardName)) {
-            return 'Phường ' . str_pad($wardName, 2, '0', STR_PAD_LEFT);
-        }
-
-        // Nếu có dạng "Phường X" với X < 10 (vd: "Phường 6")
-        if (preg_match('/^Phường\s+(\d+)$/u', $wardName, $matches)) {
-            $number = $matches[1];
-            if ($number < 10) {
-                return 'Phường ' . str_pad($number, 2, '0', STR_PAD_LEFT);
-            }
-        }
-
-        // Các trường hợp khác giữ nguyên
-        return $wardName;
-    }
-
+    /**
+     * Xử lý chuyển đổi địa chỉ hàng loạt
+     */
     public function convertAddresses(Request $request)
     {
         set_time_limit(1000);
@@ -237,44 +219,11 @@ class AddressConverterController extends Controller
         return back()->with('success', "Đã chuyển đổi $converted bản ghi thành công (trong đó cập nhật $provinceUpdated tỉnh/thành phố), $failed bản ghi thất bại.");
     }
 
+    // ========== CÁC PHƯƠNG THỨC HỖ TRỢ ==========
+
     /**
-     * Phân loại thông báo lỗi chi tiết
+     * Tải dữ liệu ánh xạ từ file JSON
      */
-    protected function getDetailedErrorMessage($province, $district, $ward)
-    {
-        $normalizedProvince = $this->normalizeName($province);
-        $mergedProvince = $this->provinceMergeMap[$normalizedProvince] ?? $normalizedProvince;
-        $normalizedDistrict = $this->normalizeName($district);
-
-        if (!isset($this->wardMappings[$mergedProvince])) {
-            return "Tỉnh/thành phố '$province' không hợp lệ hoặc không có trong danh sách chuyển đổi";
-        }
-
-        $provinceExists = !empty($province);
-        $districtExists = !empty($district);
-        $wardExists = !empty($ward);
-
-        if ($provinceExists && $districtExists && $wardExists) {
-            if (
-                !isset($this->wardMappings[$mergedProvince][$normalizedDistrict]) &&
-                !isset($this->wardMappings[$mergedProvince]['*'])
-            ) {
-                return "Không tìm thấy quận/huyện '$district' thuộc '$province' trong danh sách chuyển đổi";
-            }
-            return "Không tìm thấy phường/xã '$ward' thuộc '$district', '$province' trong danh sách chuyển đổi";
-        }
-
-        if ($provinceExists && $districtExists) {
-            return "Thiếu thông tin phường/xã (có tỉnh '$province' và quận/huyện '$district')";
-        }
-
-        if ($provinceExists) {
-            return "Thiếu thông tin quận/huyện và phường/xã (chỉ có tỉnh '$province')";
-        }
-
-        return "Thông tin địa chỉ không đầy đủ hoặc không hợp lệ";
-    }
-
     protected function loadWardMappingsFromApi()
     {
         $jsonFilePath = storage_path('app/address_data.json');
@@ -362,22 +311,9 @@ class AddressConverterController extends Controller
         Log::info("Ward mappings loaded from file: tổng cộng {$total} bản ghi");
     }
 
-    protected function addWardMapping($province, $oldWard, $newWard, $districts)
-    {
-        foreach ($districts as $district) {
-            $normalizedDistrict = $this->normalizeName($district);
-            if ($normalizedDistrict === 'Không xác định') {
-                $normalizedDistrict = '*'; // Đại diện cho tất cả các quận/huyện
-            }
-
-            if (!isset($this->wardMappings[$province][$normalizedDistrict])) {
-                $this->wardMappings[$province][$normalizedDistrict] = [];
-            }
-
-            $this->wardMappings[$province][$normalizedDistrict][$oldWard] = $newWard;
-        }
-    }
-
+    /**
+     * Tìm tên phường/xã mới dựa trên thông tin cũ
+     */
     protected function findNewWard($province, $oldWard, $district)
     {
         $normalizedProvince = $this->normalizeName($province);
@@ -440,6 +376,121 @@ class AddressConverterController extends Controller
         return null;
     }
 
+    /**
+     * Thêm một ánh xạ phường/xã vào danh sách
+     */
+    protected function addWardMapping($province, $oldWard, $newWard, $districts)
+    {
+        foreach ($districts as $district) {
+            $normalizedDistrict = $this->normalizeName($district);
+            if ($normalizedDistrict === 'Không xác định') {
+                $normalizedDistrict = '*'; // Đại diện cho tất cả các quận/huyện
+            }
+
+            if (!isset($this->wardMappings[$province][$normalizedDistrict])) {
+                $this->wardMappings[$province][$normalizedDistrict] = [];
+            }
+
+            $this->wardMappings[$province][$normalizedDistrict][$oldWard] = $newWard;
+        }
+    }
+
+    /**
+     * Chuẩn hóa tên phường/xã
+     */
+    protected function normalizeWardName($wardName)
+    {
+        $wardName = trim($wardName);
+
+        // Nếu chỉ là số (vd: "8")
+        if (preg_match('/^\d+$/', $wardName)) {
+            return 'Phường ' . str_pad($wardName, 2, '0', STR_PAD_LEFT);
+        }
+
+        // Nếu có dạng "Phường X" với X < 10 (vd: "Phường 6")
+        if (preg_match('/^Phường\s+(\d+)$/u', $wardName, $matches)) {
+            $number = $matches[1];
+            if ($number < 10) {
+                return 'Phường ' . str_pad($number, 2, '0', STR_PAD_LEFT);
+            }
+        }
+
+        // Các trường hợp khác giữ nguyên
+        return $wardName;
+    }
+
+    /**
+     * Chuẩn hóa tên (bỏ các tiền tố)
+     */
+    protected function normalizeName($text)
+    {
+        $text = trim($text);
+        $text = preg_replace('/^(Thành phố|Tỉnh|Quận|Huyện|Phường|Xã|Thị xã|Thị trấn)\s+/u', '', $text);
+        return $text;
+    }
+
+    /**
+     * Chuẩn hóa tên tỉnh/thành phố
+     */
+    protected function normalizeProvinceName($provinceName)
+    {
+        $provinceName = trim($provinceName);
+
+        // Danh sách các thành phố trực thuộc trung ương
+        $cities = ['Hà Nội', 'Hồ Chí Minh', 'Hải Phòng', 'Đà Nẵng', 'Cần Thơ'];
+
+        // Loại bỏ các tiền tố hiện có nếu có
+        $provinceName = preg_replace('/^(Tỉnh|Thành phố)\s+/u', '', $provinceName);
+
+        // Thêm tiền tố phù hợp
+        if (in_array($provinceName, $cities)) {
+            return "Thành phố $provinceName";
+        } else {
+            return "Tỉnh $provinceName";
+        }
+    }
+
+    /**
+     * Tạo thông báo lỗi chi tiết
+     */
+    protected function getDetailedErrorMessage($province, $district, $ward)
+    {
+        $normalizedProvince = $this->normalizeName($province);
+        $mergedProvince = $this->provinceMergeMap[$normalizedProvince] ?? $normalizedProvince;
+        $normalizedDistrict = $this->normalizeName($district);
+
+        if (!isset($this->wardMappings[$mergedProvince])) {
+            return "Tỉnh/thành phố '$province' không hợp lệ hoặc không có trong danh sách chuyển đổi";
+        }
+
+        $provinceExists = !empty($province);
+        $districtExists = !empty($district);
+        $wardExists = !empty($ward);
+
+        if ($provinceExists && $districtExists && $wardExists) {
+            if (
+                !isset($this->wardMappings[$mergedProvince][$normalizedDistrict]) &&
+                !isset($this->wardMappings[$mergedProvince]['*'])
+            ) {
+                return "Không tìm thấy quận/huyện '$district' thuộc '$province' trong danh sách chuyển đổi";
+            }
+            return "Không tìm thấy phường/xã '$ward' thuộc '$district', '$province' trong danh sách chuyển đổi";
+        }
+
+        if ($provinceExists && $districtExists) {
+            return "Thiếu thông tin phường/xã (có tỉnh '$province' và quận/huyện '$district')";
+        }
+
+        if ($provinceExists) {
+            return "Thiếu thông tin quận/huyện và phường/xã (chỉ có tỉnh '$province')";
+        }
+
+        return "Thông tin địa chỉ không đầy đủ hoặc không hợp lệ";
+    }
+
+    /**
+     * Kiểm tra xem có nên bỏ qua tên phường/xã không
+     */
     protected function shouldIgnoreWard($wardName)
     {
         $ignorePatterns = [
@@ -457,6 +508,9 @@ class AddressConverterController extends Controller
         return false;
     }
 
+    /**
+     * Kiểm tra khớp một phần
+     */
     protected function isPartialMatch($needle, $haystack)
     {
         // Kiểm tra xem needle có xuất hiện trong haystack không
@@ -464,6 +518,9 @@ class AddressConverterController extends Controller
         return str_contains($haystack, $needle) || str_contains($needle, $haystack);
     }
 
+    /**
+     * Xóa dấu tiếng Việt
+     */
     protected function removeDiacritics($str)
     {
         $str = preg_replace('/[àáạảãâầấậẩẫăằắặẳẵ]/u', 'a', $str);
@@ -481,30 +538,5 @@ class AddressConverterController extends Controller
         $str = preg_replace('/[ỲÝỴỶỸ]/u', 'Y', $str);
         $str = preg_replace('/Đ/u', 'D', $str);
         return $str;
-    }
-
-    protected function normalizeName($text)
-    {
-        $text = trim($text);
-        $text = preg_replace('/^(Thành phố|Tỉnh|Quận|Huyện|Phường|Xã|Thị xã|Thị trấn)\s+/u', '', $text);
-        return $text;
-    }
-
-    protected function normalizeProvinceName($provinceName)
-    {
-        $provinceName = trim($provinceName);
-
-        // Danh sách các thành phố trực thuộc trung ương
-        $cities = ['Hà Nội', 'Hồ Chí Minh', 'Hải Phòng', 'Đà Nẵng', 'Cần Thơ'];
-
-        // Loại bỏ các tiền tố hiện có nếu có
-        $provinceName = preg_replace('/^(Tỉnh|Thành phố)\s+/u', '', $provinceName);
-
-        // Thêm tiền tố phù hợp
-        if (in_array($provinceName, $cities)) {
-            return "Thành phố $provinceName";
-        } else {
-            return "Tỉnh $provinceName";
-        }
     }
 }
