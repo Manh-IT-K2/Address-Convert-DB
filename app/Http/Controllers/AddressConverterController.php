@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Log;
 
 class AddressConverterController extends Controller
@@ -105,10 +106,12 @@ class AddressConverterController extends Controller
         $failed = 0;
         $provinceUpdated = 0;
         $failedRecords = [];
+        $duplicatesRemoved = 0;
 
         // Lấy tổng số bản ghi để tính %
         $totalRecords = DB::table($tableName)->count();
 
+        // Chuyển đổi địa chỉ
         DB::table($tableName)
             ->orderBy($idField)
             ->chunk(100, function ($records) use (
@@ -132,19 +135,12 @@ class AddressConverterController extends Controller
                     // Khởi tạo giá trị mặc định
                     $errorMessage = null;
 
-                    if (!$oldProvince || !$oldWard || !$district) {
-                        if (!$oldProvince && !$oldWard && !$district) {
-                            $errorMessage = 'Thiếu thông tin tỉnh, quận/huyện và phường/xã';
-                        } elseif (!$oldProvince && !$district) {
-                            $errorMessage = 'Thiếu thông tin tỉnh và quận/huyện';
-                        } elseif (!$oldProvince && !$oldWard) {
+                    // Thay thế đoạn kiểm tra điều kiện hiện tại bằng:
+                    if (!$oldProvince || !$oldWard) {
+                        if (!$oldProvince && !$oldWard) {
                             $errorMessage = 'Thiếu thông tin tỉnh và phường/xã';
-                        } elseif (!$district && !$oldWard) {
-                            $errorMessage = 'Thiếu thông tin quận/huyện và phường/xã';
                         } elseif (!$oldProvince) {
                             $errorMessage = 'Thiếu thông tin tỉnh/thành phố';
-                        } elseif (!$district) {
-                            $errorMessage = 'Thiếu thông tin quận/huyện';
                         } else {
                             $errorMessage = 'Thiếu thông tin phường/xã';
                         }
@@ -176,7 +172,7 @@ class AddressConverterController extends Controller
                         Log::info("Converted successfully ID {$recordId}: $oldWard, $district, $oldProvince => $newWard");
                     } else {
                         // Trường hợp không chuyển đổi được
-                        $newDistrict = trim($district . ', ' . $oldWard);
+                        $newDistrict = !empty($district) ? trim($district . ', ' . $oldWard) : $oldWard;
                         $updateData[$districtField] = $newDistrict;
 
                         $errorMessage = $this->getDetailedErrorMessage($oldProvince, $district, $normalizedWard);
@@ -202,12 +198,45 @@ class AddressConverterController extends Controller
                 }
             });
 
+        // Xóa các bản ghi trùng lặp sau khi đã cập nhật xong
+        // Chỉ thực hiện nếu wardField đã được xóa (set thành null or rỗng)
+        $hasWardField = Schema::hasColumn($tableName, $wardField);
+
+        if (!$hasWardField || DB::table($tableName)->whereRaw("$wardField IS NOT NULL AND $wardField <> ''")->count() === 0) {
+            // Tìm các bản ghi trùng lặp
+            $duplicates = DB::table($tableName)
+                ->select($provinceField, $districtField)
+                ->selectRaw('COUNT(*) as count')
+                ->groupBy($provinceField, $districtField)
+                ->having('count', '>', 1)
+                ->get();
+
+            foreach ($duplicates as $duplicate) {
+                // Lấy tất cả ID của các bản ghi trùng lặp
+                $ids = DB::table($tableName)
+                    ->where($provinceField, $duplicate->{$provinceField})
+                    ->where($districtField, $duplicate->{$districtField})
+                    ->orderBy($idField)
+                    ->pluck($idField)
+                    ->toArray();
+
+                // Giữ lại bản ghi đầu tiên, xóa các bản ghi còn lại
+                if (count($ids) > 1) {
+                    $idsToDelete = array_slice($ids, 1);
+                    DB::table($tableName)->whereIn($idField, $idsToDelete)->delete();
+                    $duplicatesRemoved += count($idsToDelete);
+                    Log::info("Removed " . count($idsToDelete) . " duplicates for {$duplicate->{$provinceField}} - {$duplicate->{$districtField}}");
+                }
+            }
+        }
+
         // Lưu danh sách thất bại vào session
         $request->session()->flash('failed_records', array_slice($failedRecords, 0, 1000));
         $request->session()->flash('total_failed', $failed);
         $request->session()->flash('converted', $converted);
         $request->session()->flash('total_records', $totalRecords);
         $request->session()->flash('success_rate', $totalRecords > 0 ? round($converted / $totalRecords * 100, 2) : 0);
+        $request->session()->flash('duplicates_removed', $duplicatesRemoved);
         $request->session()->flash('table_config', [
             'table_name' => $tableName,
             'id_field' => $idField,
@@ -216,7 +245,7 @@ class AddressConverterController extends Controller
             'ward_field' => $wardField
         ]);
 
-        return back()->with('success', "Đã chuyển đổi $converted bản ghi thành công (trong đó cập nhật $provinceUpdated tỉnh/thành phố), $failed bản ghi thất bại.");
+        return back()->with('success', "Đã chuyển đổi $converted bản ghi thành công (trong đó cập nhật $provinceUpdated tỉnh/thành phố), $failed bản ghi thất bại. Đã xóa $duplicatesRemoved bản ghi trùng lặp.");
     }
 
     // ========== CÁC PHƯƠNG THỨC HỖ TRỢ ==========
