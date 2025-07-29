@@ -255,7 +255,7 @@ class AddressConverterController extends Controller
      */
     protected function loadWardMappingsFromApi()
     {
-        $jsonFilePath = storage_path('app/address_data.json');
+        $jsonFilePath = storage_path('app/public/address_data.json');
 
         if (!file_exists($jsonFilePath)) {
             abort(500, 'Không tìm thấy file dữ liệu địa chỉ: ' . $jsonFilePath);
